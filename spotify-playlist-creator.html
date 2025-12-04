@@ -359,6 +359,34 @@
             return exactMatch || data.artists.items[0];
         }
 
+        async function searchFeaturedTracks(artistName) {
+            const featuredTracks = [];
+            const searchTerms = [
+                `feat. ${artistName}`,
+                `ft. ${artistName}`,
+                `featuring ${artistName}`,
+                `feat ${artistName}`,
+                `ft ${artistName}`
+            ];
+
+            for (const searchTerm of searchTerms) {
+                try {
+                    const data = await fetchWebApi(
+                        `v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=50`,
+                        'GET'
+                    );
+
+                    if (data.tracks && data.tracks.items) {
+                        featuredTracks.push(...data.tracks.items);
+                    }
+                } catch (error) {
+                    console.error(`Error searching for "${searchTerm}":`, error);
+                }
+            }
+
+            return featuredTracks;
+        }
+
         async function getArtistAlbums(artistId) {
             let albums = [];
             let offset = 0;
@@ -428,7 +456,7 @@
                 .trim();
         }
 
-        async function getUniqueArtistTracks(artistIds) {
+        async function getUniqueArtistTracks(artists) {
             const trackMap = new Map();
             const duplicates = [];
 
@@ -462,7 +490,8 @@
                 return false;
             }
 
-            for (const artistId of artistIds) {
+            for (const artist of artists) {
+                const artistId = artist.id;
                 updateStatus(`Fetching albums for artist...`, 'info');
                 const albums = await getArtistAlbums(artistId);
 
@@ -528,6 +557,31 @@
                             }
                         }
                     }
+                }
+
+                // Search for featured tracks
+                updateStatus(`Searching for featured tracks for ${artist.name}...`, 'info');
+                const featuredTracks = await searchFeaturedTracks(artist.name);
+
+                for (const track of featuredTracks) {
+                    // Check if track should be filtered out
+                    if (shouldFilterTrack(track.name)) {
+                        continue;
+                    }
+
+                    const normalized = normalizeTrackName(track.name);
+                    const isVar = isVariation(track.name);
+                    const key = `${normalized}_${isVar ? track.name : 'standard'}`;
+
+                    if (!trackMap.has(key)) {
+                        // Store featured track with its album info
+                        trackMap.set(key, {
+                            track: track,
+                            album: track.album,
+                            releaseDate: track.album.release_date
+                        });
+                    }
+                    // If duplicate, we just skip it (already have this track)
                 }
             }
 
@@ -599,8 +653,7 @@
 
                 updateStatus(`Created playlist: ${playlist.name}`, 'info');
 
-                const artistIds = artists.map(a => a.id);
-                const result = await getUniqueArtistTracks(artistIds);
+                const result = await getUniqueArtistTracks(artists);
                 const tracks = result.tracks;
                 const duplicates = result.duplicates;
 
