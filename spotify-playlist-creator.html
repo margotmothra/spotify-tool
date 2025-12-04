@@ -385,10 +385,9 @@
                                 continue;
                             }
 
-                            // Validate: artist must be in the track's artists array
+                            // Validate: artist must be in the track's artists array (exact match)
                             const hasArtist = track.artists.some(artist =>
-                                artist.name.toLowerCase().includes(artistNameLower) ||
-                                artistNameLower.includes(artist.name.toLowerCase())
+                                artist.name.toLowerCase() === artistNameLower
                             );
 
                             // Also check if track name contains featuring pattern
