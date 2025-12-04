@@ -420,7 +420,7 @@
             
             while (true) {
                 const data = await fetchWebApi(
-                    `v1/artists/${artistId}/albums?include_groups=album,single,compilation&limit=${limit}&offset=${offset}`,
+                    `v1/artists/${artistId}/albums?include_groups=album,single,compilation,appears_on&limit=${limit}&offset=${offset}`,
                     'GET'
                 );
                 albums.push(...data.items);
