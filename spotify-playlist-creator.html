@@ -168,6 +168,21 @@
                 <input type="checkbox" id="keepLive" checked>
                 <label for="keepLive">Keep live/session recordings</label>
             </div>
+
+            <div class="setting-group">
+                <input type="checkbox" id="removeInstrumental">
+                <label for="removeInstrumental">Remove instrumental versions</label>
+            </div>
+
+            <div class="setting-group">
+                <input type="checkbox" id="removeRemix">
+                <label for="removeRemix">Remove remixes</label>
+            </div>
+
+            <div class="setting-group">
+                <label for="customBlacklist" style="display: block; margin-bottom: 5px;">Custom blacklist (comma-separated phrases to remove):</label>
+                <input type="text" id="customBlacklist" placeholder="e.g., karaoke, demo, rehearsal" style="width: 100%;">
+            </div>
         </div>
 
         <div style="margin-top: 20px;">
@@ -376,8 +391,35 @@
             const trackMap = new Map();
             const duplicates = [];
 
-            // Get chronology preference
+            // Get settings
             const preferNewer = document.querySelector('input[name="chronology"]:checked').value === 'newer';
+            const removeInstrumental = document.getElementById('removeInstrumental').checked;
+            const removeRemix = document.getElementById('removeRemix').checked;
+            const customBlacklist = document.getElementById('customBlacklist').value
+                .split(',')
+                .map(phrase => phrase.trim().toLowerCase())
+                .filter(phrase => phrase.length > 0);
+
+            // Function to check if track should be filtered out
+            function shouldFilterTrack(trackName) {
+                const nameLower = trackName.toLowerCase();
+
+                if (removeInstrumental && nameLower.includes('instrumental')) {
+                    return true;
+                }
+
+                if (removeRemix && nameLower.includes('remix')) {
+                    return true;
+                }
+
+                for (const phrase of customBlacklist) {
+                    if (nameLower.includes(phrase)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
 
             for (const artistId of artistIds) {
                 updateStatus(`Fetching albums for artist...`, 'info');
@@ -389,6 +431,16 @@
                     const tracks = await getAlbumTracks(album.id);
 
                     for (const track of tracks) {
+                        // Check if track should be filtered out
+                        if (shouldFilterTrack(track.name)) {
+                            duplicates.push({
+                                track: track,
+                                duplicateOf: null,
+                                album: album.name,
+                                reason: 'Filtered by settings'
+                            });
+                            continue;
+                        }
                         const normalized = normalizeTrackName(track.name);
                         const isVar = isVariation(track.name);
                         const key = `${normalized}_${isVar ? track.name : 'standard'}`;
