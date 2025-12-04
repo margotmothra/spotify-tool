@@ -211,10 +211,39 @@
                 getAccessToken(code);
             }
 
-            // Auto-fill playlist name and description based on artist names
+            // Restore form values from localStorage if they exist
             const artistInput = document.getElementById('artistName');
             const playlistInput = document.getElementById('playlistName');
             const descriptionInput = document.getElementById('playlistDescription');
+
+            if (localStorage.getItem('spotifyPlaylistCreator_artistName')) {
+                artistInput.value = localStorage.getItem('spotifyPlaylistCreator_artistName');
+                playlistInput.value = localStorage.getItem('spotifyPlaylistCreator_playlistName');
+                descriptionInput.value = localStorage.getItem('spotifyPlaylistCreator_playlistDescription');
+                document.getElementById('customBlacklist').value = localStorage.getItem('spotifyPlaylistCreator_customBlacklist') || '';
+
+                // Restore checkbox states
+                const preferOlder = localStorage.getItem('spotifyPlaylistCreator_preferOlder') === 'true';
+                document.getElementById('preferOlder').checked = preferOlder;
+                document.getElementById('preferNewer').checked = !preferOlder;
+                document.getElementById('keepAlternate').checked = localStorage.getItem('spotifyPlaylistCreator_keepAlternate') === 'true';
+                document.getElementById('keepLive').checked = localStorage.getItem('spotifyPlaylistCreator_keepLive') === 'true';
+                document.getElementById('removeInstrumental').checked = localStorage.getItem('spotifyPlaylistCreator_removeInstrumental') === 'true';
+                document.getElementById('removeRemix').checked = localStorage.getItem('spotifyPlaylistCreator_removeRemix') === 'true';
+
+                // Clear localStorage after restoring
+                localStorage.removeItem('spotifyPlaylistCreator_artistName');
+                localStorage.removeItem('spotifyPlaylistCreator_playlistName');
+                localStorage.removeItem('spotifyPlaylistCreator_playlistDescription');
+                localStorage.removeItem('spotifyPlaylistCreator_customBlacklist');
+                localStorage.removeItem('spotifyPlaylistCreator_preferOlder');
+                localStorage.removeItem('spotifyPlaylistCreator_keepAlternate');
+                localStorage.removeItem('spotifyPlaylistCreator_keepLive');
+                localStorage.removeItem('spotifyPlaylistCreator_removeInstrumental');
+                localStorage.removeItem('spotifyPlaylistCreator_removeRemix');
+            }
+
+            // Auto-fill playlist name and description based on artist names
 
             function updatePlaylistFields() {
                 const artistNames = artistInput.value
@@ -239,6 +268,17 @@
         };
 
         function login() {
+            // Save form values to localStorage before redirecting
+            localStorage.setItem('spotifyPlaylistCreator_artistName', document.getElementById('artistName').value);
+            localStorage.setItem('spotifyPlaylistCreator_playlistName', document.getElementById('playlistName').value);
+            localStorage.setItem('spotifyPlaylistCreator_playlistDescription', document.getElementById('playlistDescription').value);
+            localStorage.setItem('spotifyPlaylistCreator_customBlacklist', document.getElementById('customBlacklist').value);
+            localStorage.setItem('spotifyPlaylistCreator_preferOlder', document.getElementById('preferOlder').checked);
+            localStorage.setItem('spotifyPlaylistCreator_keepAlternate', document.getElementById('keepAlternate').checked);
+            localStorage.setItem('spotifyPlaylistCreator_keepLive', document.getElementById('keepLive').checked);
+            localStorage.setItem('spotifyPlaylistCreator_removeInstrumental', document.getElementById('removeInstrumental').checked);
+            localStorage.setItem('spotifyPlaylistCreator_removeRemix', document.getElementById('removeRemix').checked);
+
             const scopes = 'playlist-modify-private playlist-modify-public';
             const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}`;
             window.location.href = authUrl;
