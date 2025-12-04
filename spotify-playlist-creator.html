@@ -74,7 +74,7 @@
         <textarea id="artistName" placeholder="Enter artist names, e.g.:&#10;Andy Shauf&#10;Sufjan Stevens&#10;or: Andy Shauf, Sufjan Stevens">Andy Shauf</textarea>
         
         <label for="playlistName">Playlist Name:</label>
-        <input type="text" id="playlistName" value="Andy Shauf - Complete" placeholder="Enter playlist name">
+        <input type="text" id="playlistName" value="" placeholder="Auto-filled from artist names">
         
         <div style="margin-top: 20px;">
             <button id="loginBtn" onclick="login()">Login with Spotify</button>
@@ -97,10 +97,31 @@
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const code = urlParams.get('code');
-            
+
             if (code) {
                 getAccessToken(code);
             }
+
+            // Auto-fill playlist name based on artist names
+            const artistInput = document.getElementById('artistName');
+            const playlistInput = document.getElementById('playlistName');
+
+            function updatePlaylistName() {
+                const artistNames = artistInput.value
+                    .split(/[\n,]+/)
+                    .map(name => name.trim())
+                    .filter(name => name.length > 0);
+
+                if (artistNames.length > 0) {
+                    const playlistName = artistNames.join(' + ') + ' - Complete';
+                    playlistInput.value = playlistName;
+                }
+            }
+
+            artistInput.addEventListener('input', updatePlaylistName);
+
+            // Trigger initial auto-fill if there's a default value
+            updatePlaylistName();
         };
 
         function login() {
