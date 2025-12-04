@@ -153,10 +153,21 @@
 
         async function searchArtist(artistName) {
             const data = await fetchWebApi(
-                `v1/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`,
+                `v1/search?q=${encodeURIComponent(artistName)}&type=artist&limit=10`,
                 'GET'
             );
-            return data.artists.items[0];
+
+            if (!data.artists.items || data.artists.items.length === 0) {
+                return null;
+            }
+
+            // Try to find exact match first (case-insensitive)
+            const exactMatch = data.artists.items.find(
+                artist => artist.name.toLowerCase() === artistName.toLowerCase()
+            );
+
+            // Return exact match if found, otherwise return first result
+            return exactMatch || data.artists.items[0];
         }
 
         async function getArtistAlbums(artistId) {
