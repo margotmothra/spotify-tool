@@ -2,7 +2,7 @@
 
 A web app for creating Spotify playlists from complete artist discographies with smart deduplication.
 
-![Spotify Playlist Creator Screenshot](assets/example.png)
+![Spotify Playlist Creator Screenshot](assets/example.png?v=2)
 
 ## Features
 
