@@ -536,6 +536,18 @@
                             });
                             continue;
                         }
+
+                        // Validate that the artist is actually on this track (important for "appears_on" albums)
+                        const artistOnTrack = track.artists && track.artists.some(trackArtist =>
+                            trackArtist.id === artist.id ||
+                            trackArtist.name.toLowerCase() === artist.name.toLowerCase()
+                        );
+
+                        if (!artistOnTrack) {
+                            // Skip tracks where the artist doesn't appear
+                            continue;
+                        }
+
                         const normalized = normalizeTrackName(track.name);
                         const isVar = isVariation(track.name);
                         const key = `${normalized}_${isVar ? track.name : 'standard'}`;
