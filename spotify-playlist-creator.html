@@ -105,7 +105,10 @@
         
         <label for="playlistName">Playlist Name:</label>
         <input type="text" id="playlistName" value="" placeholder="Auto-filled from artist names">
-        
+
+        <label for="playlistDescription">Playlist Description:</label>
+        <input type="text" id="playlistDescription" value="" placeholder="Auto-filled from artist names">
+
         <div style="margin-top: 20px;">
             <button id="loginBtn" onclick="login()">Login with Spotify</button>
             <button id="createBtn" onclick="createPlaylist()" disabled>Create Playlist</button>
@@ -132,11 +135,12 @@
                 getAccessToken(code);
             }
 
-            // Auto-fill playlist name based on artist names
+            // Auto-fill playlist name and description based on artist names
             const artistInput = document.getElementById('artistName');
             const playlistInput = document.getElementById('playlistName');
+            const descriptionInput = document.getElementById('playlistDescription');
 
-            function updatePlaylistName() {
+            function updatePlaylistFields() {
                 const artistNames = artistInput.value
                     .split(/[\n,]+/)
                     .map(name => name.trim())
@@ -145,13 +149,17 @@
                 if (artistNames.length > 0) {
                     const playlistName = artistNames.join(' + ') + ' - Complete';
                     playlistInput.value = playlistName;
+
+                    const artistList = artistNames.join(', ');
+                    const description = `Complete discography: ${artistList}`;
+                    descriptionInput.value = description;
                 }
             }
 
-            artistInput.addEventListener('input', updatePlaylistName);
+            artistInput.addEventListener('input', updatePlaylistFields);
 
             // Trigger initial auto-fill if there's a default value
-            updatePlaylistName();
+            updatePlaylistFields();
         };
 
         function login() {
@@ -287,34 +295,47 @@
 
         async function getUniqueArtistTracks(artistIds) {
             const trackMap = new Map();
-            
+            const duplicates = [];
+
             for (const artistId of artistIds) {
                 updateStatus(`Fetching albums for artist...`, 'info');
                 const albums = await getArtistAlbums(artistId);
-                
+
                 for (let i = 0; i < albums.length; i++) {
                     const album = albums[i];
                     updateStatus(`Fetching tracks from ${album.name} (${i+1}/${albums.length})...`, 'info');
                     const tracks = await getAlbumTracks(album.id);
-                    
+
                     for (const track of tracks) {
                         const normalized = normalizeTrackName(track.name);
                         const isVar = isVariation(track.name);
                         const key = `${normalized}_${isVar ? track.name : 'standard'}`;
-                        
+
                         if (!trackMap.has(key)) {
                             trackMap.set(key, track);
+                        } else {
+                            // Track was a duplicate - record it
+                            const original = trackMap.get(key);
+                            duplicates.push({
+                                track: track,
+                                duplicateOf: original,
+                                album: album.name
+                            });
                         }
                     }
                 }
             }
-            
-            return Array.from(trackMap.values());
+
+            return {
+                tracks: Array.from(trackMap.values()),
+                duplicates: duplicates
+            };
         }
 
         async function createPlaylist() {
             const artistInput = document.getElementById('artistName').value;
             const playlistName = document.getElementById('playlistName').value;
+            const playlistDescription = document.getElementById('playlistDescription').value;
 
             if (!artistInput || !playlistName) {
                 updateStatus('❌ Please enter both artist names and playlist name', 'error');
@@ -361,13 +382,12 @@
 
                 const user = await fetchWebApi('v1/me', 'GET');
 
-                const artistList = artistNamesFound.join(', ');
                 const playlist = await fetchWebApi(
                     `v1/users/${user.id}/playlists`,
                     'POST',
                     {
                         name: playlistName,
-                        description: `Complete discography: ${artistList} - with smart deduplication`,
+                        description: playlistDescription,
                         public: false
                     }
                 );
@@ -375,7 +395,10 @@
                 updateStatus(`Created playlist: ${playlist.name}`, 'info');
 
                 const artistIds = artists.map(a => a.id);
-                const tracks = await getUniqueArtistTracks(artistIds);
+                const result = await getUniqueArtistTracks(artistIds);
+                const tracks = result.tracks;
+                const duplicates = result.duplicates;
+
                 updateStatus(`Found ${tracks.length} unique tracks from ${artists.length} artist(s). Adding to playlist...`, 'info');
 
                 const trackUris = tracks.map(t => t.uri);
@@ -389,7 +412,21 @@
                     updateStatus(`Added tracks ${i + 1}-${Math.min(i + 100, trackUris.length)} of ${tracks.length}`, 'info');
                 }
 
-                updateStatus(`✅ Success! <a href="${playlist.external_urls.spotify}" target="_blank" style="color: #1db954;">Open Playlist</a>`, 'success');
+                // Display success message with duplicates info
+                let successMessage = `✅ Success! <a href="${playlist.external_urls.spotify}" target="_blank" style="color: #1db954;">Open Playlist</a>`;
+
+                if (duplicates.length > 0) {
+                    successMessage += `<br><br><strong>${duplicates.length} duplicate tracks removed</strong>`;
+                    successMessage += `<br><details style="margin-top: 10px;"><summary style="cursor: pointer; color: #1db954;">View removed tracks</summary><ul style="margin-top: 10px; max-height: 300px; overflow-y: auto;">`;
+
+                    duplicates.forEach(dup => {
+                        successMessage += `<li style="margin: 5px 0;">${dup.track.name} <span style="color: #888;">(from ${dup.album})</span></li>`;
+                    });
+
+                    successMessage += `</ul></details>`;
+                }
+
+                updateStatus(successMessage, 'success');
 
             } catch (error) {
                 updateStatus('❌ Error: ' + error.message, 'error');
