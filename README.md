@@ -2,11 +2,18 @@
 
 A web app for creating Spotify playlists from complete artist discographies with smart deduplication.
 
+![Spotify Playlist Creator Screenshot](assets/example.png)
+
 ## Features
 
 - Create playlists from one or multiple artists
 - Smart deduplication removes duplicate tracks across albums
-- Keeps variations (live, acoustic, remix, etc.) separate from standard versions
+- Customizable deduplication settings:
+  - Choose between older (original) or newer (deluxe/remaster) versions
+  - Option to keep alternate versions
+  - Option to keep live/session recordings
+- View which tracks were removed as duplicates
+- Auto-fill playlist name and description
 - Fetches complete discography including albums, singles, and compilations
 
 ## Setup
