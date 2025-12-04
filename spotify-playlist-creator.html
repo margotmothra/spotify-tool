@@ -44,7 +44,7 @@
         .success { color: #1db954; }
         .error { color: #e74c3c; }
         .info { color: #3498db; }
-        input {
+        input, textarea {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
@@ -52,6 +52,11 @@
             border: 1px solid #535353;
             color: #fff;
             border-radius: 4px;
+            font-family: Arial, sans-serif;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
         }
         label {
             display: block;
@@ -65,8 +70,8 @@
         <h1>🎵 Spotify Playlist Creator</h1>
         <p>Create a complete artist discography playlist with smart deduplication</p>
         
-        <label for="artistName">Artist Name:</label>
-        <input type="text" id="artistName" value="Andy Shauf" placeholder="Enter artist name">
+        <label for="artistName">Artist Names (one per line or comma-separated):</label>
+        <textarea id="artistName" placeholder="Enter artist names, e.g.:&#10;Andy Shauf&#10;Sufjan Stevens&#10;or: Andy Shauf, Sufjan Stevens">Andy Shauf</textarea>
         
         <label for="playlistName">Playlist Name:</label>
         <input type="text" id="playlistName" value="Andy Shauf - Complete" placeholder="Enter playlist name">
@@ -233,45 +238,71 @@
         }
 
         async function createPlaylist() {
-            const artistName = document.getElementById('artistName').value;
+            const artistInput = document.getElementById('artistName').value;
             const playlistName = document.getElementById('playlistName').value;
-            
-            if (!artistName || !playlistName) {
-                updateStatus('❌ Please enter both artist and playlist name', 'error');
+
+            if (!artistInput || !playlistName) {
+                updateStatus('❌ Please enter both artist names and playlist name', 'error');
+                return;
+            }
+
+            // Parse multiple artist names (split by newlines and commas)
+            const artistNames = artistInput
+                .split(/[\n,]+/)
+                .map(name => name.trim())
+                .filter(name => name.length > 0);
+
+            if (artistNames.length === 0) {
+                updateStatus('❌ Please enter at least one artist name', 'error');
                 return;
             }
 
             document.getElementById('createBtn').disabled = true;
 
             try {
-                updateStatus(`Searching for ${artistName}...`, 'info');
-                const artist = await searchArtist(artistName);
-                
-                if (!artist) {
-                    updateStatus(`❌ Artist "${artistName}" not found`, 'error');
+                // Search for all artists
+                const artists = [];
+                const artistNamesFound = [];
+
+                for (const artistName of artistNames) {
+                    updateStatus(`Searching for ${artistName}...`, 'info');
+                    const artist = await searchArtist(artistName);
+
+                    if (!artist) {
+                        updateStatus(`⚠️ Artist "${artistName}" not found, skipping...`, 'error');
+                        continue;
+                    }
+
+                    updateStatus(`Found: ${artist.name}`, 'info');
+                    artists.push(artist);
+                    artistNamesFound.push(artist.name);
+                }
+
+                if (artists.length === 0) {
+                    updateStatus('❌ No artists found', 'error');
                     document.getElementById('createBtn').disabled = false;
                     return;
                 }
-                
-                updateStatus(`Found: ${artist.name}`, 'info');
-                
+
                 const user = await fetchWebApi('v1/me', 'GET');
-                
+
+                const artistList = artistNamesFound.join(', ');
                 const playlist = await fetchWebApi(
                     `v1/users/${user.id}/playlists`,
                     'POST',
                     {
                         name: playlistName,
-                        description: `Complete ${artist.name} discography with smart deduplication`,
+                        description: `Complete discography: ${artistList} - with smart deduplication`,
                         public: false
                     }
                 );
-                
+
                 updateStatus(`Created playlist: ${playlist.name}`, 'info');
-                
-                const tracks = await getUniqueArtistTracks([artist.id]);
-                updateStatus(`Found ${tracks.length} unique tracks. Adding to playlist...`, 'info');
-                
+
+                const artistIds = artists.map(a => a.id);
+                const tracks = await getUniqueArtistTracks(artistIds);
+                updateStatus(`Found ${tracks.length} unique tracks from ${artists.length} artist(s). Adding to playlist...`, 'info');
+
                 const trackUris = tracks.map(t => t.uri);
                 for (let i = 0; i < trackUris.length; i += 100) {
                     const batch = trackUris.slice(i, i + 100);
@@ -282,9 +313,9 @@
                     );
                     updateStatus(`Added tracks ${i + 1}-${Math.min(i + 100, trackUris.length)} of ${tracks.length}`, 'info');
                 }
-                
+
                 updateStatus(`✅ Success! <a href="${playlist.external_urls.spotify}" target="_blank" style="color: #1db954;">Open Playlist</a>`, 'success');
-                
+
             } catch (error) {
                 updateStatus('❌ Error: ' + error.message, 'error');
                 console.error(error);
