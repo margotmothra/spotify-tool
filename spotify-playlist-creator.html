@@ -361,6 +361,8 @@
 
         async function searchFeaturedTracks(artistName) {
             const featuredTracks = [];
+            const validatedTracks = new Set(); // Track URIs we've already added
+            const artistNameLower = artistName.toLowerCase();
             const searchTerms = [
                 `feat. ${artistName}`,
                 `ft. ${artistName}`,
@@ -377,7 +379,31 @@
                     );
 
                     if (data.tracks && data.tracks.items) {
-                        featuredTracks.push(...data.tracks.items);
+                        for (const track of data.tracks.items) {
+                            // Skip if we've already validated this track
+                            if (validatedTracks.has(track.uri)) {
+                                continue;
+                            }
+
+                            // Validate: artist must be in the track's artists array
+                            const hasArtist = track.artists.some(artist =>
+                                artist.name.toLowerCase().includes(artistNameLower) ||
+                                artistNameLower.includes(artist.name.toLowerCase())
+                            );
+
+                            // Also check if track name contains featuring pattern
+                            const trackNameLower = track.name.toLowerCase();
+                            const hasFeatPattern =
+                                (trackNameLower.includes('feat') ||
+                                 trackNameLower.includes('ft.') ||
+                                 trackNameLower.includes('featuring')) &&
+                                trackNameLower.includes(artistNameLower);
+
+                            if (hasArtist || hasFeatPattern) {
+                                featuredTracks.push(track);
+                                validatedTracks.add(track.uri);
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error(`Error searching for "${searchTerm}":`, error);
