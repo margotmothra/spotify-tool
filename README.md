@@ -66,10 +66,10 @@ Navigate to: `http://127.0.0.1:8888/spotify-playlist-creator.html`
 3. Enter a playlist name
 4. Click "Create Playlist"
 
-The app will search for each artist, fetch all their tracks, deduplicate them, and create a private playlist in your Spotify account.
+The app will search for each artist, fetch all their tracks, deduplicate them, and create a public playlist in your Spotify account.
 
 ## Notes
 
 - `config.js` is gitignored to protect your credentials
-- Playlists are created as private by default
+- Playlists are created as public by default
 - If an artist is not found, it will be skipped
