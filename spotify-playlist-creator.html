@@ -17,6 +17,16 @@
             background-color: #282828;
             padding: 30px;
             border-radius: 8px;
+            position: relative;
+        }
+        .logo-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .logo-container img {
+            height: 40px;
+            width: auto;
         }
         button {
             background-color: #1db954;
@@ -84,7 +94,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎵 Spotify Playlist Creator</h1>
+        <div class="logo-container">
+            <img src="spotify-logo.png" alt="Spotify">
+        </div>
+        <h1>Spotify Playlist Creator</h1>
         <p>Create a complete artist discography playlist with smart deduplication</p>
         
         <label for="artistName">Artist Names (one per line or comma-separated):</label>
