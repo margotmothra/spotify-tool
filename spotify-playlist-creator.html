@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Playlist Creator - Andy Shauf</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #191414;
+            color: #fff;
+        }
+        .container {
+            background-color: #282828;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        button {
+            background-color: #1db954;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 24px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #1ed760;
+        }
+        button:disabled {
+            background-color: #535353;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #333;
+        }
+        .success { color: #1db954; }
+        .error { color: #e74c3c; }
+        .info { color: #3498db; }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #333;
+            border: 1px solid #535353;
+            color: #fff;
+            border-radius: 4px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Spotify Playlist Creator</h1>
+        <p>Create a complete artist discography playlist with smart deduplication</p>
+        
+        <label for="artistName">Artist Name:</label>
+        <input type="text" id="artistName" value="Andy Shauf" placeholder="Enter artist name">
+        
+        <label for="playlistName">Playlist Name:</label>
+        <input type="text" id="playlistName" value="Andy Shauf - Complete" placeholder="Enter playlist name">
+        
+        <div style="margin-top: 20px;">
+            <button id="loginBtn" onclick="login()">Login with Spotify</button>
+            <button id="createBtn" onclick="createPlaylist()" disabled>Create Playlist</button>
+        </div>
+        
+        <div id="status"></div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        // Load Spotify credentials from config file
+        const CLIENT_ID = SPOTIFY_CONFIG.CLIENT_ID;
+        const CLIENT_SECRET = SPOTIFY_CONFIG.CLIENT_SECRET;
+        const REDIRECT_URI = SPOTIFY_CONFIG.REDIRECT_URI;
+
+        let accessToken = null;
+
+        // Check if we're returning from OAuth
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            
+            if (code) {
+                getAccessToken(code);
+            }
+        };
+
+        function login() {
+            const scopes = 'playlist-modify-private playlist-modify-public';
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}`;
+            window.location.href = authUrl;
+        }
+
+        async function getAccessToken(code) {
+            updateStatus('Getting access token...', 'info');
+            
+            try {
+                const response = await fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Authorization': 'Basic ' + btoa(CLIENT_ID + ':' + CLIENT_SECRET)
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: REDIRECT_URI
+                    })
+                });
+                
+                const data = await response.json();
+                accessToken = data.access_token;
+                
+                document.getElementById('loginBtn').disabled = true;
+                document.getElementById('createBtn').disabled = false;
+                updateStatus('✅ Logged in successfully! Ready to create playlist.', 'success');
+                
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (error) {
+                updateStatus('❌ Error getting access token: ' + error.message, 'error');
+            }
+        }
+
+        async function fetchWebApi(endpoint, method, body) {
+            const res = await fetch(`https://api.spotify.com/${endpoint}`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                method,
+                body: JSON.stringify(body)
+            });
+            return await res.json();
+        }
+
+        async function searchArtist(artistName) {
+            const data = await fetchWebApi(
+                `v1/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`,
+                'GET'
+            );
+            return data.artists.items[0];
+        }
+
+        async function getArtistAlbums(artistId) {
+            let albums = [];
+            let offset = 0;
+            const limit = 50;
+            
+            while (true) {
+                const data = await fetchWebApi(
+                    `v1/artists/${artistId}/albums?include_groups=album,single,compilation&limit=${limit}&offset=${offset}`,
+                    'GET'
+                );
+                albums.push(...data.items);
+                
+                if (data.items.length < limit) break;
+                offset += limit;
+            }
+            
+            return albums;
+        }
+
+        async function getAlbumTracks(albumId) {
+            let tracks = [];
+            let offset = 0;
+            const limit = 50;
+            
+            while (true) {
+                const data = await fetchWebApi(
+                    `v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`,
+                    'GET'
+                );
+                tracks.push(...data.items);
+                
+                if (data.items.length < limit) break;
+                offset += limit;
+            }
+            
+            return tracks;
+        }
+
+        function isVariation(trackName) {
+            const variations = /live|acoustic|remix|remaster|demo|instrumental|radio edit|extended|version/i;
+            return variations.test(trackName);
+        }
+
+        function normalizeTrackName(name) {
+            return name
+                .toLowerCase()
+                .replace(/\s*[\(\[].*?[\)\]]\s*/g, '')
+                .replace(/[^\w\s]/g, '')
+                .trim();
+        }
+
+        async function getUniqueArtistTracks(artistIds) {
+            const trackMap = new Map();
+            
+            for (const artistId of artistIds) {
+                updateStatus(`Fetching albums for artist...`, 'info');
+                const albums = await getArtistAlbums(artistId);
+                
+                for (let i = 0; i < albums.length; i++) {
+                    const album = albums[i];
+                    updateStatus(`Fetching tracks from ${album.name} (${i+1}/${albums.length})...`, 'info');
+                    const tracks = await getAlbumTracks(album.id);
+                    
+                    for (const track of tracks) {
+                        const normalized = normalizeTrackName(track.name);
+                        const isVar = isVariation(track.name);
+                        const key = `${normalized}_${isVar ? track.name : 'standard'}`;
+                        
+                        if (!trackMap.has(key)) {
+                            trackMap.set(key, track);
+                        }
+                    }
+                }
+            }
+            
+            return Array.from(trackMap.values());
+        }
+
+        async function createPlaylist() {
+            const artistName = document.getElementById('artistName').value;
+            const playlistName = document.getElementById('playlistName').value;
+            
+            if (!artistName || !playlistName) {
+                updateStatus('❌ Please enter both artist and playlist name', 'error');
+                return;
+            }
+
+            document.getElementById('createBtn').disabled = true;
+
+            try {
+                updateStatus(`Searching for ${artistName}...`, 'info');
+                const artist = await searchArtist(artistName);
+                
+                if (!artist) {
+                    updateStatus(`❌ Artist "${artistName}" not found`, 'error');
+                    document.getElementById('createBtn').disabled = false;
+                    return;
+                }
+                
+                updateStatus(`Found: ${artist.name}`, 'info');
+                
+                const user = await fetchWebApi('v1/me', 'GET');
+                
+                const playlist = await fetchWebApi(
+                    `v1/users/${user.id}/playlists`,
+                    'POST',
+                    {
+                        name: playlistName,
+                        description: `Complete ${artist.name} discography with smart deduplication`,
+                        public: false
+                    }
+                );
+                
+                updateStatus(`Created playlist: ${playlist.name}`, 'info');
+                
+                const tracks = await getUniqueArtistTracks([artist.id]);
+                updateStatus(`Found ${tracks.length} unique tracks. Adding to playlist...`, 'info');
+                
+                const trackUris = tracks.map(t => t.uri);
+                for (let i = 0; i < trackUris.length; i += 100) {
+                    const batch = trackUris.slice(i, i + 100);
+                    await fetchWebApi(
+                        `v1/playlists/${playlist.id}/tracks`,
+                        'POST',
+                        { uris: batch }
+                    );
+                    updateStatus(`Added tracks ${i + 1}-${Math.min(i + 100, trackUris.length)} of ${tracks.length}`, 'info');
+                }
+                
+                updateStatus(`✅ Success! <a href="${playlist.external_urls.spotify}" target="_blank" style="color: #1db954;">Open Playlist</a>`, 'success');
+                
+            } catch (error) {
+                updateStatus('❌ Error: ' + error.message, 'error');
+                console.error(error);
+            } finally {
+                document.getElementById('createBtn').disabled = false;
+            }
+        }
+
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = type;
+        }
+    </script>
+</body>
+</html>
+
